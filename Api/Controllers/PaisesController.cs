@@ -1,4 +1,7 @@
-﻿using Domain;
+﻿using Application.Paises.Commands;
+using Application.Paises.Queries;
+using Domain.Entities;
+using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,65 +13,48 @@ namespace Api.Controllers
     [ApiController]
     public class PaisesController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IMediator _mediator;
 
-        public PaisesController(ApplicationDbContext context)
+        public PaisesController(IMediator mediator)
         {
-            _context = context;
+            _mediator = mediator;
         }
 
         // GET: api/paises
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Pais>>> GetPaises()
         {
-            return await _context.Paises.ToListAsync();
+            var result = await _mediator.Send(new GetAllPaisesQuery());
+            return Ok(result);
         }
 
         // GET: api/paises/{id}
         [HttpGet("{id}")]
         public async Task<ActionResult<Pais>> GetPais(Guid id)
         {
-            var pais = await _context.Paises.FindAsync(id);
-            if (pais == null)
+            var result = await _mediator.Send(new GetPaisByIdQuery(id));
+            if (result == null)
                 return NotFound();
 
-            return pais;
+            return Ok(result);
         }
 
         // POST: api/paises
         [HttpPost]
-        public async Task<ActionResult<Pais>> PostPais(Pais pais)
+        public async Task<ActionResult<Guid>> CreatePais([FromBody] CreatePaisCommand command)
         {
-            pais.Id = Guid.NewGuid();
-            pais.CreatedAt = DateTime.UtcNow;
-
-            _context.Paises.Add(pais);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetPais), new { id = pais.Id }, pais);
+            var id = await _mediator.Send(command);
+            return CreatedAtAction(nameof(GetPais), new { id }, new { id });
         }
 
         // PUT: api/paises/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutPais(Guid id, Pais pais)
+        public async Task<IActionResult> UpdatePais(Guid id, [FromBody] UpdatePaisCommand command)
         {
-            if (id != pais.Id)
-                return BadRequest();
+            if (id != command.Id)
+                return BadRequest("El ID no coincide con el cuerpo del request.");
 
-            pais.ModifiedAt = DateTime.UtcNow;
-            _context.Entry(pais).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!_context.Paises.Any(e => e.Id == id))
-                    return NotFound();
-                throw;
-            }
-
+            await _mediator.Send(command);
             return NoContent();
         }
 
@@ -76,14 +62,10 @@ namespace Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePais(Guid id)
         {
-            var pais = await _context.Paises.FindAsync(id);
-            if (pais == null)
-                return NotFound();
-
-            _context.Paises.Remove(pais);
-            await _context.SaveChangesAsync();
-
+            await _mediator.Send(new DeletePaisCommand(id));
             return NoContent();
         }
+
+
     }
 }

@@ -1,8 +1,9 @@
-﻿using Domain;
-using Microsoft.AspNetCore.Http;
+﻿using Application.Contratos.Commands;
+using Application.Contratos.Queries;
+using Domain.Entities;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System;
 
 namespace Api.Controllers
 {
@@ -10,81 +11,43 @@ namespace Api.Controllers
     [ApiController]
     public class ContratosController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IMediator _mediator;
 
-        public ContratosController(ApplicationDbContext context)
+        public ContratosController(IMediator mediator)
         {
-            _context = context;
+            _mediator = mediator;
         }
 
-        // GET: api/contratos
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Contrato>>> GetContratos()
-        {
-            return await _context.Contratos.ToListAsync();
-        }
+        public async Task<IEnumerable<Contrato>> GetAll()
+            => await _mediator.Send(new GetContratosQuery());
 
-        // GET: api/contratos/{id}
         [HttpGet("{id}")]
-        public async Task<ActionResult<Contrato>> GetContrato(Guid id)
+        public async Task<ActionResult<Contrato>> GetById(Guid id)
         {
-            var contrato = await _context.Contratos.FindAsync(id);
-
-            if (contrato == null)
-                return NotFound();
-
-            return contrato;
+            var result = await _mediator.Send(new GetContratoByIdQuery(id));
+            return result is null ? NotFound() : Ok(result);
         }
 
-        // POST: api/contratos
         [HttpPost]
-        public async Task<ActionResult<Contrato>> PostContrato(Contrato contrato)
+        public async Task<ActionResult<Guid>> Create(CreateContratoCommand command)
         {
-            contrato.Id = Guid.NewGuid();
-            contrato.CreatedAt = DateTime.UtcNow;
-
-            _context.Contratos.Add(contrato);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetContrato), new { id = contrato.Id }, contrato);
+            var id = await _mediator.Send(command);
+            return CreatedAtAction(nameof(GetById), new { id }, id);
         }
 
-        // PUT: api/contratos/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutContrato(Guid id, Contrato contrato)
+        public async Task<IActionResult> Update(Guid id, UpdateContratoCommand command)
         {
-            if (id != contrato.Id)
-                return BadRequest();
-
-            contrato.ModifiedAt = DateTime.UtcNow;
-            _context.Entry(contrato).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!_context.Contratos.Any(e => e.Id == id))
-                    return NotFound();
-
-                throw;
-            }
-
+            if (id != command.Id) return BadRequest();
+            await _mediator.Send(command);
             return NoContent();
         }
 
-        // DELETE: api/contratos/{id}
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteContrato(Guid id)
+        public async Task<IActionResult> Delete(Guid id)
         {
-            var contrato = await _context.Contratos.FindAsync(id);
-            if (contrato == null)
-                return NotFound();
-
-            _context.Contratos.Remove(contrato);
-            await _context.SaveChangesAsync();
-
+            await _mediator.Send(new DeleteContratoCommand(id));
             return NoContent();
         }
     }
